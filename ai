@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# Load API key from .env
+source .env
+
+# Check if user gave any input
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 [-c <custom prompt>] <natural language command description>"
+    exit 1
+fi
+
+flag_used=0
+EXTRA_OPTIONS=""
+
+# Parse flags
+while getopts ":c:" opt; do
+  flag_used=1
+  case $opt in
+    c)
+      EXTRA_OPTIONS="$OPTARG"
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      exit 1
+      ;;
+    :)
+      echo "flag -$OPTARG has no args :(" >&2
+      exit 1
+      ;;
+  esac
+done
+
+# Remove parsed flags from arguments
+shift $((OPTIND - 1))
+
+# Use flag content or fallback prompt
+if [ "$flag_used" -eq 1 ]; then
+  USER_PROMPT="$EXTRA_OPTIONS"
+else
+  USER_PROMPT="Give me the best Linux terminal command to: $*. Only return the command. No explanation."
+fi
+
+# Set API values
+GROQ_API_KEY=${API_KEY}
+MODEL="llama-3.3-70b-versatile"
+URL="https://api.groq.com/openai/v1/chat/completions"
+
+# Make request
+RESPONSE=$(curl -s -X POST "$URL" \
+  -H "Authorization: Bearer $GROQ_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "'"$MODEL"'",
+    "messages": [{
+      "role": "user",
+      "content": "'"$USER_PROMPT"'"
+    }],
+    "temperature": 0.2,
+    "max_tokens": 100
+  }')
+
+# Print result
+if [ "$flag_used" -eq 0 ]; then
+  echo -e "\n💡 Suggested Command:"
+fi
+
+echo "$RESPONSE" | jq -r '.choices[0].message.content'
+
